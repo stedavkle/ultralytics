@@ -631,7 +631,7 @@ class RandomFlip:
     Also updates any instances (bounding boxes, keypoints, etc.) accordingly.
     """
 
-    def __init__(self, p=0.5, direction="horizontal", flip_idx=None) -> None:
+    def __init__(self, p=0.5, direction="horizontal", flip_idx=None, flip_cls_h=None, flip_cls_v=None) -> None:
         """
         Initializes the RandomFlip class with probability and direction.
 
@@ -647,6 +647,8 @@ class RandomFlip:
         self.p = p
         self.direction = direction
         self.flip_idx = flip_idx
+        self.flip_cls_h = flip_cls_h
+        self.flip_cls_v = flip_cls_v
 
     def __call__(self, labels):
         """
@@ -666,16 +668,31 @@ class RandomFlip:
         h = 1 if instances.normalized else h
         w = 1 if instances.normalized else w
 
+        im_file = labels["im_file"]
+        lb = labels["cls"]
+        with open(r'C:\Users\david\Downloads\flip.txt', "a") as f:
+            f.write(f"{im_file}\n")
+            f.write(f"{lb}\n")
         # Flip up-down
         if self.direction == "vertical" and random.random() < self.p:
             img = np.flipud(img)
             instances.flipud(h)
+            if self.flip_cls_v is not None:
+                for i in range(len(labels["cls"])):
+                    for j in range(len(labels["cls"][i])):
+                        labels["cls"][i][j] = float(self.flip_cls_v[int(labels["cls"][i][j])])
+                
+
         if self.direction == "horizontal" and random.random() < self.p:
             img = np.fliplr(img)
             instances.fliplr(w)
             # For keypoints
             if self.flip_idx is not None and instances.keypoints is not None:
                 instances.keypoints = np.ascontiguousarray(instances.keypoints[:, self.flip_idx, :])
+            if self.flip_cls_h is not None:
+                for i in range(len(labels["cls"])):
+                    for j in range(len(labels["cls"][i])):
+                        labels["cls"][i][j] = float(self.flip_cls_h[int(labels["cls"][i][j])])
         labels["img"] = np.ascontiguousarray(img)
         labels["instances"] = instances
         return labels
@@ -983,6 +1000,8 @@ def v8_transforms(dataset, imgsz, hyp, stretch=False):
         ]
     )
     flip_idx = dataset.data.get("flip_idx", [])  # for keypoints augmentation
+    flip_cls_h = dataset.data.get("flip_cls_h", [])  # for class label augmentation
+    flip_cls_v = dataset.data.get("flip_cls_v", [])  # for class label augmentation
     if dataset.use_keypoints:
         kpt_shape = dataset.data.get("kpt_shape", None)
         if len(flip_idx) == 0 and hyp.fliplr > 0.0:
@@ -997,8 +1016,8 @@ def v8_transforms(dataset, imgsz, hyp, stretch=False):
             MixUp(dataset, pre_transform=pre_transform, p=hyp.mixup),
             Albumentations(p=1.0),
             RandomHSV(hgain=hyp.hsv_h, sgain=hyp.hsv_s, vgain=hyp.hsv_v),
-            RandomFlip(direction="vertical", p=hyp.flipud),
-            RandomFlip(direction="horizontal", p=hyp.fliplr, flip_idx=flip_idx),
+            RandomFlip(direction="vertical", p=hyp.flipud, flip_cls_v=flip_cls_v),
+            RandomFlip(direction="horizontal", p=hyp.fliplr, flip_idx=flip_idx, flip_cls_h=flip_cls_h),
         ]
     )  # transforms
 
